@@ -12,12 +12,12 @@ jobs:
       matrix:
         target:
           [
-            { platform: linux, arch: x86_64, os: ubuntu-22.04 },
-            { platform: linux, arch: x86_32, os: ubuntu-22.04 },
+            #{ platform: linux, arch: x86_64, os: ubuntu-22.04 },
+            #{ platform: linux, arch: x86_32, os: ubuntu-22.04 },
             # { platform: linux, arch: arm64, os: ubuntu-22.04-arm }, # Часто требует self-hosted runners, раскомментируйте если уверены
             # { platform: linux, arch: arm32, os: ubuntu-22.04-arm },
-            { platform: windows, arch: x86_64, os: windows-latest },
-            { platform: windows, arch: x86_32, os: windows-latest },
+            #{ platform: windows, arch: x86_64, os: windows-latest },
+            #{ platform: windows, arch: x86_32, os: windows-latest },
             # { platform: windows, arch: arm64, os: windows-latest }, # Экспериментально для Windows
             { platform: web, arch: wasm32, os: ubuntu-22.04 },
           ]
@@ -74,7 +74,7 @@ jobs:
         env:
           SCONS_CACHE: ${{ github.workspace }}/.scons-cache/
         run: |
-          scons target=${{ matrix.target-type }} platform=${{ matrix.target.platform }} arch=${{ matrix.target.arch }} precision=${{ matrix.float-precision }}
+          scons target=${{ matrix.target-type }} platform=${{ matrix.target.platform }} arch=${{ matrix.target.arch }} precision=${{ matrix.float-precision }} threads=no
 
       - name: Save .scons_cache
         uses: ./godot-cpp/.github/actions/godot-cache-save
