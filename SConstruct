@@ -2,6 +2,7 @@
 import os
 import sys
 
+
 from methods import print_error
 
 libname = "GodotMonocypher"
