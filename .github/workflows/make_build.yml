@@ -10,24 +10,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A build is made for every possible combination of parameters
-        # You can add or remove entries from the arrays of each parameter to customize which builds you want to run.
-        # See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/running-variations-of-jobs-in-a-workflow
         target:
           [
             { platform: linux, arch: x86_64, os: ubuntu-22.04 },
             { platform: linux, arch: x86_32, os: ubuntu-22.04 },
-            { platform: linux, arch: arm64, os: ubuntu-22.04-arm },
-            { platform: linux, arch: arm32, os: ubuntu-22.04-arm },
+            # { platform: linux, arch: arm64, os: ubuntu-22.04-arm }, # Часто требует self-hosted runners, раскомментируйте если уверены
+            # { platform: linux, arch: arm32, os: ubuntu-22.04-arm },
             { platform: windows, arch: x86_64, os: windows-latest },
             { platform: windows, arch: x86_32, os: windows-latest },
-            { platform: windows, arch: arm64, os: windows-latest },
-            #{ platform: macos, arch: universal, os: macos-latest },
-            #{ platform: android, arch: x86_64, os: ubuntu-22.04 },
-            #{ platform: android, arch: x86_32, os: ubuntu-22.04 },
-            #{ platform: android, arch: arm64, os: ubuntu-22.04 },
-            #{ platform: android, arch: arm32, os: ubuntu-22.04 },
-            #{ platform: ios, arch: arm64, os: macos-latest },
+            # { platform: windows, arch: arm64, os: windows-latest }, # Экспериментально для Windows
             { platform: web, arch: wasm32, os: ubuntu-22.04 },
           ]
         target-type: [template_debug, template_release]
@@ -47,12 +38,28 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
 
-      # Setup dependencies
-      - name: Setup godot-cpp
+      # --- ИЗМЕНЕНИЯ НАЧИНАЮТСЯ ЗДЕСЬ ---
+
+      # Настройка для ВСЕХ платформ КРОМЕ Windows (используем стандартный скрипт godot-cpp)
+      - name: Setup godot-cpp (Non-Windows)
+        if: ${{ matrix.target.platform != 'windows' }}
         uses: ./godot-cpp/.github/actions/setup-godot-cpp
         with:
           platform: ${{ matrix.target.platform }}
           em-version: 3.1.62
+
+      # Ручная настройка для Windows (чтобы избежать установки MinGW через Chocolatey)
+      - name: Setup Python (Windows)
+        if: ${{ matrix.target.platform == 'windows' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install SCons (Windows)
+        if: ${{ matrix.target.platform == 'windows' }}
+        run: pip install scons
+
+      # --- ИЗМЕНЕНИЯ ЗАКАНЧИВАЮТСЯ ЗДЕСЬ ---
 
       # Build GDExtension (with caches)
 
@@ -91,7 +98,6 @@ jobs:
             ${{ github.workspace }}/bin/**
 
   # Merges all the build artifacts together into a single godot-cpp-template artifact.
-  # If you comment out this step, all the builds will be uploaded individually.
   merge:
     runs-on: ubuntu-22.04
     needs: build
