@@ -3,9 +3,11 @@
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <cstring>
-#include <cstdlib> // Здесь живет std::free
+#include <cstdlib> // std::malloc, std::free
 
-#include "tweetnacl.h"
+extern "C" {
+    #include "tweetnacl.h"
+}
 
 using namespace godot;
 
@@ -166,3 +168,4 @@ void Ed25519Wrapper::_bind_methods() {
     ClassDB::bind_method(D_METHOD("sign", "message", "private_key"), &Ed25519Wrapper::sign);
     ClassDB::bind_method(D_METHOD("verify", "signature", "message", "public_key"), &Ed25519Wrapper::verify);
 }
+
