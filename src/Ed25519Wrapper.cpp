@@ -3,34 +3,28 @@
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <cstring>
-#include <cstdlib>
+#include <cstdlib> // Здесь живет std::free
 
 #include "tweetnacl.h"
 
 using namespace godot;
 
 // --- МЕХАНИЗМ ПОДМЕНЫ ЭНТРОПИИ ---
-// Статические переменные для передачи seed в C-функцию randombytes
 static unsigned char _g_forced_seed[32];
 static bool _g_use_forced_seed = false;
 
-// Реализация randombytes, которую требует tweetnacl.c
 extern "C" {
     void randombytes(unsigned char *x, unsigned long long xlen) {
-        // 1. Режим принудительного seed (для восстановления кошелька)
         if (_g_use_forced_seed && xlen == 32) {
             memcpy(x, _g_forced_seed, 32);
             return;
         }
 
-        // 2. Обычный режим (используем CSPRNG от Godot)
         PackedByteArray bytes = OS::get_singleton()->get_entropy((int)xlen);
         
         if (bytes.size() == (int)xlen) {
             memcpy(x, bytes.ptr(), xlen);
         } else {
-            // Fallback: если OS entropy недоступна (крайне редко), используем rand()
-            // В продакшене лучше падать с ошибкой, но для надежности сборки оставим так.
             for (unsigned long long i = 0; i < xlen; i++) {
                 x[i] = (unsigned char)(rand() % 256);
             }
@@ -59,19 +53,15 @@ Dictionary Ed25519Wrapper::key_pair_from_seed(const PackedByteArray &seed) {
         return result;
     }
 
-    // Включаем режим подмены RNG
     memcpy(_g_forced_seed, seed.ptr(), 32);
     _g_use_forced_seed = true;
 
     unsigned char pk[32];
     unsigned char sk[64];
 
-    // TweetNaCl запросит randombytes(32) и получит наш seed
     crypto_sign_keypair(pk, sk);
 
-    // Выключаем режим подмены
     _g_use_forced_seed = false;
-    // Очищаем буфер seed в памяти для безопасности
     memset(_g_forced_seed, 0, 32);
 
     PackedByteArray pba_private;
@@ -91,7 +81,6 @@ Dictionary Ed25519Wrapper::key_pair_random() {
     unsigned char pk[32];
     unsigned char sk[64];
 
-    // Вызываем со стандартным RNG
     crypto_sign_keypair(pk, sk);
 
     PackedByteArray pba_private;
@@ -116,25 +105,21 @@ PackedByteArray Ed25519Wrapper::sign(const PackedByteArray &message, const Packe
         return signature;
     }
 
-    // TweetNaCl crypto_sign формирует "подписанное сообщение" (сигнатура + сообщение).
-    // Нам нужно выделить буфер под (msg_len + 64).
     unsigned long long mlen = message.size();
     unsigned long long smlen = mlen + 64;
     
-    unsigned char *sm = (unsigned char *)malloc(smlen);
+    unsigned char *sm = (unsigned char *)std::malloc(smlen); // Используем std::malloc
     if (!sm) {
         ERR_PRINT("Out of memory in sign.");
         return signature;
     }
 
-    // crypto_sign(signed_msg, &signed_len, msg, msg_len, sk)
     crypto_sign(sm, &smlen, message.ptr(), mlen, private_key.ptr());
 
-    // В TweetNaCl первые 64 байта результата 'sm' - это и есть подпись.
     signature.resize(64);
     memcpy(signature.ptrw(), sm, 64);
 
-    free(sm);
+    std::free(sm); // ИСПРАВЛЕНО: std::free вместо free
     return signature;
 }
 
@@ -151,28 +136,25 @@ bool Ed25519Wrapper::verify(const PackedByteArray &signature, const PackedByteAr
     unsigned long long mlen = message.size();
     unsigned long long smlen = mlen + 64;
 
-    // Для проверки TweetNaCl требует воссоздать структуру "подпись + сообщение"
-    unsigned char *sm = (unsigned char *)malloc(smlen);
-    unsigned char *m_out = (unsigned char *)malloc(smlen); // Буфер для проверенного сообщения
+    unsigned char *sm = (unsigned char *)std::malloc(smlen);
+    unsigned char *m_out = (unsigned char *)std::malloc(smlen);
     
     if (!sm || !m_out) {
-        if(sm) free(sm);
-        if(m_out) free(m_out);
+        if(sm) std::free(sm);       // ИСПРАВЛЕНО: std::free
+        if(m_out) std::free(m_out); // ИСПРАВЛЕНО: std::free
         ERR_PRINT("Out of memory in verify.");
         return false;
     }
 
-    // Собираем sm: [64 байта подписи] + [сообщение]
     memcpy(sm, signature.ptr(), 64);
     memcpy(sm + 64, message.ptr(), mlen);
 
     unsigned long long m_out_len;
     
-    // crypto_sign_open возвращает 0 если подпись верна, -1 если нет
     int result = crypto_sign_open(m_out, &m_out_len, sm, smlen, public_key.ptr());
 
-    free(sm);
-    free(m_out);
+    std::free(sm);    // ИСПРАВЛЕНО: std::free
+    std::free(m_out); // ИСПРАВЛЕНО: std::free
 
     return (result == 0);
 }
